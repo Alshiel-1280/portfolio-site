@@ -107,91 +107,33 @@ npm start
 
 ## デプロイ
 
-### VPSへのデプロイ手順
+詳細な手順は以下のドキュメントを参照してください：
+
+- **[DEPLOY.md](./DEPLOY.md)** - VPSへの完全なデプロイ手順
+- **[QUICK_FIX.md](./QUICK_FIX.md)** - SSL導入後の403エラー修正ガイド
+- **[SSL_FIX_GUIDE.md](./SSL_FIX_GUIDE.md)** - SSL関連のトラブルシューティング
+
+### クイックスタート
 
 1. GitHubにリポジトリを作成してプッシュ
+2. VPSサーバーでリポジトリをクローン
+3. 依存パッケージをインストール
+4. 環境変数を設定
+5. ビルドしてPM2で起動
+6. Nginxを設定
+7. SSL証明書を導入
+
+### SSL導入後に403エラーが出た場合
 
 ```bash
-git add .
-git commit -m "Initial commit"
-git remote add origin https://github.com/your-username/your-repo.git
-git push -u origin main
+# サーバー上で実行
+cd /var/www/portfolio-site
+git pull origin main
+chmod +x fix-ssl-403.sh
+./fix-ssl-403.sh
 ```
 
-2. VPSサーバーにSSH接続
-
-3. リポジトリをクローン
-
-```bash
-cd /var/www
-git clone https://github.com/your-username/your-repo.git
-cd your-repo
-```
-
-4. 依存パッケージをインストール
-
-```bash
-npm install
-```
-
-5. 環境変数を設定
-
-```bash
-nano .env.production
-# microCMSの情報を入力して保存
-```
-
-6. ビルド
-
-```bash
-npm run build
-```
-
-7. PM2で起動
-
-```bash
-pm2 start npm --name "portfolio" -- start
-pm2 save
-```
-
-8. Nginxの設定
-
-```bash
-sudo nano /etc/nginx/sites-available/your-domain.com
-```
-
-設定内容：
-
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-9. 設定を有効化
-
-```bash
-sudo ln -s /etc/nginx/sites-available/your-domain.com /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl restart nginx
-```
-
-10. HTTPS化
-
-```bash
-sudo apt install certbot python3-certbot-nginx -y
-sudo certbot --nginx -d your-domain.com
-```
+詳細は [QUICK_FIX.md](./QUICK_FIX.md) を参照してください。
 
 ## ディレクトリ構造
 

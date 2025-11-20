@@ -176,13 +176,103 @@ sudo apt install certbot python3-certbot-nginx -y
 
 ### 4-2. SSL証明書の取得
 
+⚠️ **重要な注意事項**
+
+Certbotは自動的にNginx設定を変更しますが、**Next.jsへのプロキシ設定が失われる可能性があります**。
+
+証明書取得前に、必ず現在の設定をバックアップしてください：
+
+```bash
+sudo cp /etc/nginx/sites-available/portfolio /etc/nginx/sites-available/portfolio.pre-ssl-backup
+```
+
+証明書を取得：
+
 ```bash
 sudo certbot --nginx -d your-domain.com -d www.your-domain.com
 ```
 
 メールアドレスを入力し、利用規約に同意します。
 
-### 4-3. 自動更新の確認
+### 4-3. Nginx設定の確認と修正（重要！）
+
+Certbot実行後、プロキシ設定が正しく保持されているか確認：
+
+```bash
+sudo cat /etc/nginx/sites-available/portfolio
+```
+
+**以下の設定が含まれていることを確認してください：**
+
+```nginx
+# HTTPS設定ブロック内に以下が必須
+location / {
+    proxy_pass http://localhost:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_cache_bypass $http_upgrade;
+}
+```
+
+もし上記の設定が失われている場合は、手動で追加するか、`fix-ssl-403.sh`スクリプトを実行してください。
+
+正しい設定の完全な例：
+
+```nginx
+# HTTPからHTTPSへのリダイレクト
+server {
+    listen 80;
+    listen [::]:80;
+    server_name your-domain.com www.your-domain.com;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://$server_name$request_uri;
+    }
+}
+
+# HTTPS設定
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name your-domain.com www.your-domain.com;
+
+    ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # Next.jsアプリケーションへのプロキシ設定（これが最重要！）
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+設定を変更した場合は、必ずテストして再起動：
+
+```bash
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+### 4-4. 自動更新の確認
 
 ```bash
 sudo certbot renew --dry-run
@@ -190,9 +280,18 @@ sudo certbot renew --dry-run
 
 エラーがなければ、証明書の自動更新が正しく設定されています。
 
-### 4-4. 動作確認
+### 4-5. 動作確認
+
+```bash
+# HTTPSアクセスのテスト
+curl -I https://your-domain.com
+
+# 200が返ってくればOK
+```
 
 ブラウザで `https://your-domain.com` にアクセスして、鍵マークが表示されることを確認。
+
+**もし403 Forbiddenエラーが出る場合**は、[QUICK_FIX.md](./QUICK_FIX.md)を参照してください。
 
 ## 5. 更新作業（コードを変更した場合）
 
